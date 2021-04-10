@@ -40,23 +40,8 @@ local function color_no(mynode, len, levels)
                 end
                 current = current:parent()
         end
-        if (counter % len == 0) then
-                return len
-        else
-                return (counter % len)
-        end
-end
 
--- get the rainbow level nodes for a specific syntax
-local function get_rainbow_levels(bufnr, root, lang)
-        local matches =
-                queries.get_capture_matches(bufnr, "@rainbow.level", "rainbow", root, lang)
-        local levels = {}
-        for _, node in ipairs(matches) do
-                levels[node.node:type()] = true
-        end
-
-        return levels
+        return ((counter - 1) % len) + 1
 end
 
 local callbackfn = function(bufnr, parser)
@@ -70,28 +55,35 @@ local callbackfn = function(bufnr, parser)
         parser:parse()
         parser:for_each_tree(function(tree, lang_tree)
                 local root_node = tree:root()
-
                 local lang = lang_tree:lang()
-                local query = queries.get_query(lang, "rainbow")
-                local levels = get_rainbow_levels(bufnr, root_node, lang)
+                local query = queries.get_query(lang, 'rainbow')
 
                 if query ~= nil then
+                        local levels = {}
+                        local parens = {}
+
                         for capture, node, _ in query:iter_captures(root_node, bufnr) do
-                                if query.captures[capture] == "rainbow.paren" then
-                                        -- set colour for this nesting level
-                                        local color_no_ = color_no(node, #colors, levels)
-                                        -- range of the capture, zero-indexed
-                                        local _, startCol, endRow, endCol = node:range()
-                                        vim.highlight.range(
-                                                bufnr,
-                                                nsid,
-                                                "rainbowcol" .. color_no_,
-                                                { endRow, startCol },
-                                                { endRow, endCol - 1 },
-                                                "blockwise",
-                                                true
-                                        )
+                                if query.captures[capture] == 'rainbow.paren' then
+                                        table.insert(parens, node)
+                                else -- otherwise it's rainbow.level
+                                        levels[node:type()] = true
                                 end
+                        end
+
+                        for _, node in pairs(parens) do
+                                -- set colour for this nesting level
+                                local color_no_ = color_no(node, #colors, levels)
+                                -- range of the capture, zero-indexed
+                                local _, startCol, endRow, endCol = node:range()
+                                vim.highlight.range(
+                                        bufnr,
+                                        nsid,
+                                        "rainbowcol" .. color_no_,
+                                        { endRow, startCol },
+                                        { endRow, endCol - 1 },
+                                        "blockwise",
+                                        true
+                                )
                         end
                 end
         end)
