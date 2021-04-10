@@ -2,9 +2,11 @@ local queries = require("nvim-treesitter.query")
 local nvim_query = require("vim.treesitter.query")
 local parsers = require("nvim-treesitter.parsers")
 local configs = require("nvim-treesitter.configs")
+local locals = require("nvim-treesitter.locals")
 local nsid = vim.api.nvim_create_namespace("rainbow_ns")
 local colors = require("rainbow.colors")
 local termcolors = require("rainbow.termcolors")
+local async_lib = require("plenary.async_lib")
 local state_table = {} -- tracks which buffers have rainbow disabled
 local extended_languages = {
         'bash',
@@ -30,32 +32,66 @@ for i = 1, #colors do
         vim.cmd(s)
 end
 
--- finds the nesting level of given node
-local function color_no(mynode, len, levels)
-        local counter = 0
-        local current = mynode:parent() -- we don't want to count the current node
-        while current:parent() ~= nil do
-                if levels[current:type()] then
-                        counter = counter + 1
+local function try_async(f, v1, v2, v3, v4, v5, v6)
+        local cancel = false
+        return function()
+                if cancel then
+                        return true
                 end
-                current = current:parent()
-        end
-        if (counter % len == 0) then
-                return len
-        else
-                return (counter % len)
+                local async_handle
+                async_handle = vim.loop.new_async(vim.schedule_wrap(function()
+                        f(v1, v2, v3, v4, v5, v6)
+                        async_handle:close()
+                end))
+                async_handle:send()
+        end, function()
+                cancel = true
         end
 end
 
+
+local function color_node(bufnr, node, len, count)
+        local color_no = ((count - 1) % len) + 1
+        local _, startCol, endRow, endCol = node:range()
+        vim.highlight.range(
+                bufnr,
+                nsid,
+                "rainbowcol" .. color_no,
+                { endRow, startCol },
+                { endRow, endCol - 1 },
+                "blockwise",
+                true
+        )
+end
+
+MATCHES = {}
+
 -- get the rainbow level nodes for a specific syntax
-local function get_rainbow_levels(bufnr, root, lang)
-        local matches = queries.get_capture_matches(bufnr, '@rainbow.level', 'rainbow', root, lang)
-        local levels = {}
-        for _, node in ipairs(matches) do
-                levels[node.node:type()] = true
+local function get_rainbow_matches(bufnr, query, root, lang)
+        local _matches = queries.get_capture_matches(bufnr, query, 'rainbow', root, lang)
+        local matches = {}
+        for _, node in pairs(_matches) do
+                table.insert(MATCHES, tostring(node.node))
+                matches[node.node:type()] = true
         end
 
-        return levels
+        return matches
+end
+
+local function highlight_node_recursive(bufnr, node, levels, parens, len, count)
+        for child in node:iter_children() do
+                if levels[child:type()] then
+                        highlight_node_recursive(bufnr, child, levels, parens, len, count + 1)
+                        -- try_async(highlight_node_recursive, bufnr, child, levels, parens, len, count + 1)
+                else
+                        highlight_node_recursive(bufnr, child, levels, parens, len, count)
+                        -- try_async(highlight_node_recursive, bufnr, child, levels, parens, len, count)
+                end
+                if parens[child:type()] then
+                        -- table.insert(DEBUG, child:type())
+                        color_node(bufnr, child, len, count)
+                end
+        end
 end
 
 local callbackfn = function(bufnr, parser)
@@ -71,50 +107,16 @@ local callbackfn = function(bufnr, parser)
                 local root_node = tree:root()
 
                 local lang = lang_tree:lang()
-                local query = queries.get_query(lang, 'rainbow')
-                local levels = get_rainbow_levels(bufnr, root_node, lang)
-
-                if query ~= nil then
-                        for capture, node, _ in query:iter_captures(root_node, bufnr) do
-                                if query.captures[capture] == 'rainbow.paren' then
-                                        -- set colour for this nesting level
-                                        local color_no_ = color_no(node, #colors, levels)
-                                        -- range of the capture, zero-indexed
-                                        local _, startCol, endRow, endCol = node:range()
-                                        vim.highlight.range(
-                                                bufnr,
-                                                nsid,
-                                                "rainbowcol" .. color_no_,
-                                                { endRow, startCol },
-                                                { endRow, endCol - 1 },
-                                                "blockwise",
-                                                true
-                                        )
-                                end
-                        end
-                end
+                local levels = get_rainbow_matches(bufnr, '@rainbow.level', root_node, lang)
+                local parens = get_rainbow_matches(bufnr, '@rainbow.paren', root_node, lang)
+                -- PARENS = parens
+                -- LEVELS = levels
+                highlight_node_recursive(bufnr, root_node, levels, parens, #colors, 0)
         end)
 end
 
-local function try_async(f, bufnr, parser)
-        local cancel = false
-        return function()
-                if cancel then
-                        return true
-                end
-                local async_handle
-                async_handle = vim.loop.new_async(vim.schedule_wrap(function()
-                        f(bufnr, parser)
-                        async_handle:close()
-                end))
-                async_handle:send()
-        end, function()
-                cancel = true
-        end
-end
-
 local function register_predicates(config)
-        for _, lang in ipairs(extended_languages) do
+        for _, lang in pairs(extended_languages) do
                 local enable_extended_mode
                 if type(config.extended_mode) == "table" then
                         enable_extended_mode = config.extended_mode[lang]
