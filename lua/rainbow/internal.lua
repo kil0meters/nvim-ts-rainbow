@@ -56,14 +56,14 @@ local callbackfn = function(bufnr, parser)
         parser:for_each_tree(function(tree, lang_tree)
                 local root_node = tree:root()
                 local lang = lang_tree:lang()
-                local query = queries.get_query(lang, 'rainbow')
+                local query = queries.get_query(lang, "rainbow")
 
                 if query ~= nil then
                         local levels = {}
                         local parens = {}
 
                         for capture, node, _ in query:iter_captures(root_node, bufnr) do
-                                if query.captures[capture] == 'rainbow.paren' then
+                                if query.captures[capture] == "rainbow.paren" then
                                         table.insert(parens, node)
                                 else -- otherwise it's rainbow.level
                                         levels[node:type()] = true
