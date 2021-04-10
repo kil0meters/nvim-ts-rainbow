@@ -11,5 +11,4 @@
 [
   (object)
   (array)
-  [(pair) (#json-extended-rainbow-mode?)]
 ] @rainbow.level
