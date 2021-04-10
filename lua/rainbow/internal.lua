@@ -62,7 +62,7 @@ local callbackfn = function(bufnr, parser)
                         local levels = {}
 
                         for capture, node, _ in query:iter_captures(root_node, bufnr) do
-                                if query.captures[capture] == 'rainbow.level' then
+                                if query.captures[capture] == "rainbow.level" then
                                         levels[node:type()] = true
                                 else -- otherwise it's rainbow.paren
                                         -- set colour for this nesting level
