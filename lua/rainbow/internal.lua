@@ -60,30 +60,25 @@ local callbackfn = function(bufnr, parser)
 
                 if query ~= nil then
                         local levels = {}
-                        local parens = {}
 
                         for capture, node, _ in query:iter_captures(root_node, bufnr) do
-                                if query.captures[capture] == 'rainbow.paren' then
-                                        table.insert(parens, node)
-                                else -- otherwise it's rainbow.level
+                                if query.captures[capture] == 'rainbow.level' then
                                         levels[node:type()] = true
+                                else -- otherwise it's rainbow.paren
+                                        -- set colour for this nesting level
+                                        local color_no_ = color_no(node, #colors, levels)
+                                        -- range of the capture, zero-indexed
+                                        local _, startCol, endRow, endCol = node:range()
+                                        vim.highlight.range(
+                                                bufnr,
+                                                nsid,
+                                                "rainbowcol" .. color_no_,
+                                                { endRow, startCol },
+                                                { endRow, endCol - 1 },
+                                                "blockwise",
+                                                true
+                                        )
                                 end
-                        end
-
-                        for _, node in pairs(parens) do
-                                -- set colour for this nesting level
-                                local color_no_ = color_no(node, #colors, levels)
-                                -- range of the capture, zero-indexed
-                                local _, startCol, endRow, endCol = node:range()
-                                vim.highlight.range(
-                                        bufnr,
-                                        nsid,
-                                        "rainbowcol" .. color_no_,
-                                        { endRow, startCol },
-                                        { endRow, endCol - 1 },
-                                        "blockwise",
-                                        true
-                                )
                         end
                 end
         end)
