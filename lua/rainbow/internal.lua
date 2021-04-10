@@ -56,7 +56,7 @@ local callbackfn = function(bufnr, parser)
         parser:for_each_tree(function(tree, lang_tree)
                 local root_node = tree:root()
                 local lang = lang_tree:lang()
-                local query = queries.get_query(lang, 'rainbow')
+                local query = queries.get_query(lang, "rainbow")
 
                 if query ~= nil then
                         local levels = {}
