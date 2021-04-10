@@ -12,4 +12,6 @@
   (while_statement)
   (if_statement)
   (call)
+  (list)
+  (dictionary)
 ] @rainbow.level
