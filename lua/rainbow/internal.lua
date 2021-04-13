@@ -35,7 +35,6 @@ local M = {}
 
 M.highlight_node_recursive =
   async(function(parens, bufnr, extended_mode, node, len, count)
-    -- M.highlight_node_recursive = function(parens, bufnr, extended_mode, node, len, count)
     local next_count = count
 
     for child in node:iter_children() do
@@ -54,18 +53,15 @@ M.highlight_node_recursive =
         end
 
         await(M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count))
-        -- M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count)
 
         if child:named() then
           next_count = next_count - paren[1]
         end
       elseif child:child_count() ~= 0 then
         await(M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count))
-        -- M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count)
       end
     end
   end)
--- end
 
 M.callbackfn = async(function(bufnr, parser, extended_mode)
   -- no need to do anything when pum is open
@@ -88,7 +84,6 @@ M.callbackfn = async(function(bufnr, parser, extended_mode)
       parens = require("rainbow.langs.default")
     end
     await(M.highlight_node_recursive(parens, bufnr, extended_mode, root_node, #colors, 1))
-    -- M.highlight_node_recursive(parens, bufnr, extended_mode, root_node, #colors, 1)
   end)
 end)
 
@@ -101,7 +96,7 @@ function M.attach(bufnr, lang)
   vim.api.nvim_buf_attach(bufnr, false, {
     on_lines = void(async(function()
       await(M.callbackfn(bufnr, parser, extended_mode))
-    end)), 
+    end)),
   }) --do it on every change
 end
 
