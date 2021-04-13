@@ -8,17 +8,15 @@ local colors = require("rainbow.colors")
 local termcolors = require("rainbow.termcolors")
 local async_lib = require("plenary.async_lib")
 local state_table = {} -- tracks which buffers have rainbow disabled
-local extended_languages = {
-        'bash',
-        'html',
-        'jsx',
-        'latex',
-        'lua',
-        'ocaml',
-        'ruby',
-        'verilog',
-        'json',
-        'yaml'
+local custom = {
+        ['html'] = true,
+        ['jsx'] = true,
+        ['lua'] = true,
+        ['python'] = true,
+        ['ruby'] = true,
+        ['svelte'] = true,
+        ['toml'] = true,
+        ['tsx'] = true,
 }
 
 -- define highlight groups
@@ -64,37 +62,45 @@ local function color_node(bufnr, node, len, count)
         )
 end
 
-MATCHES = {}
+VALUES = {}
+local function highlight_node_recursive(lang, extended_mode, node, len, count)
+        local next_count = count
 
--- get the rainbow level nodes for a specific syntax
-local function get_rainbow_matches(bufnr, query, root, lang)
-        local _matches = queries.get_capture_matches(bufnr, query, 'rainbow', root, lang)
-        local matches = {}
-        for _, node in pairs(_matches) do
-                table.insert(MATCHES, tostring(node.node))
-                matches[node.node:type()] = true
+        local parens = {}
+        if custom[lang] then
+                parens = require('rainbow.langs.' .. lang)
+        else
+                parens = require('rainbow.langs.default')
         end
 
-        return matches
-end
-
-local function highlight_node_recursive(bufnr, node, levels, parens, len, count)
         for child in node:iter_children() do
-                if levels[child:type()] then
-                        highlight_node_recursive(bufnr, child, levels, parens, len, count + 1)
-                        -- try_async(highlight_node_recursive, bufnr, child, levels, parens, len, count + 1)
+                local paren = {}
+                if child:named() then
+                        paren = parens[child:type() .. '+']
                 else
-                        highlight_node_recursive(bufnr, child, levels, parens, len, count)
-                        -- try_async(highlight_node_recursive, bufnr, child, levels, parens, len, count)
+                        paren = parens[child:type()]
                 end
-                if parens[child:type()] then
-                        -- table.insert(DEBUG, child:type())
-                        color_node(bufnr, child, len, count)
+
+                if paren ~= nil then
+                        table.insert(VALUES, child:type())
+                        next_count = next_count + paren[1]
+
+                        if paren[2] or (extended_mode and paren[3]) then
+                                color_node(lang, child, len, count)
+                        end
+
+                        highlight_node_recursive(lang, extended_mode, child, len, next_count)
+
+                        if child:named() then
+                                next_count = next_count - paren[1]
+                        end
+                elseif child:child_count() ~= 0 then
+                        highlight_node_recursive(lang, extended_mode, child, len, next_count)
                 end
         end
 end
 
-local callbackfn = function(bufnr, parser)
+local function callbackfn(bufnr, parser, extended_mode)
         -- no need to do anything when pum is open
         if vim.fn.pumvisible() == 1 then
                 return
@@ -107,26 +113,8 @@ local callbackfn = function(bufnr, parser)
                 local root_node = tree:root()
 
                 local lang = lang_tree:lang()
-                local levels = get_rainbow_matches(bufnr, '@rainbow.level', root_node, lang)
-                local parens = get_rainbow_matches(bufnr, '@rainbow.paren', root_node, lang)
-                -- PARENS = parens
-                -- LEVELS = levels
-                highlight_node_recursive(bufnr, root_node, levels, parens, #colors, 0)
+                highlight_node_recursive(lang, extended_mode, root_node, #colors, 1)
         end)
-end
-
-local function register_predicates(config)
-        for _, lang in pairs(extended_languages) do
-                local enable_extended_mode
-                if type(config.extended_mode) == "table" then
-                        enable_extended_mode = config.extended_mode[lang]
-                else
-                        enable_extended_mode = config.extended_mode
-                end
-                nvim_query.add_predicate(lang .. "-extended-rainbow-mode?", function()
-                        return enable_extended_mode
-                end, true)
-        end
 end
 
 local M = {}
@@ -134,11 +122,12 @@ local M = {}
 function M.attach(bufnr, lang)
         local parser = parsers.get_parser(bufnr, lang)
         local config = configs.get_module("rainbow")
-        register_predicates(config)
+        -- register_predicates(config)
 
-        local attachf, detachf = try_async(callbackfn, bufnr, parser)
+        local extended_mode = config.extended_mode or config.extended_mode[lang]
+        local attachf, detachf = try_async(callbackfn, bufnr, parser, extended_mode)
         state_table[bufnr] = detachf
-        callbackfn(bufnr, parser) -- do it on attach
+        callbackfn(bufnr, parser, extended_mode) -- do it on attach
         vim.api.nvim_buf_attach(bufnr, false, { on_lines = attachf }) --do it on every change
 end
 
