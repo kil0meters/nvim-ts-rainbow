@@ -38,7 +38,7 @@ M.highlight_node_recursive = async(function(parens, bufnr, extended_mode, node, 
   local next_count = count
 
   for child in node:iter_children() do
-    local paren = {}
+    local paren
     if child:named() then
       paren = parens[child:type() .. '+']
     else
@@ -80,7 +80,7 @@ M.callbackfn = async(function(bufnr, parser, extended_mode)
 
     local lang = lang_tree:lang()
 
-    local parens = {}
+    local parens
     if custom[lang] then
       parens = require('rainbow.langs.' .. lang)
     else
@@ -94,11 +94,6 @@ end)
 function M.attach(bufnr, lang)
   local parser = parsers.get_parser(bufnr, lang)
   local config = configs.get_module("rainbow")
-
-  FUNCTION = function()
-    -- await(M.callbackfn(bufnr, parser, true)) -- do it on attach
-    await(M.callbackfn(bufnr, parser, true)) -- do it on attach
-  end
 
   local extended_mode = config.extended_mode or config.extended_mode[lang]
   await(M.callbackfn(bufnr, parser, extended_mode)) -- do it on attach
