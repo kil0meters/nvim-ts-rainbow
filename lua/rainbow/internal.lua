@@ -7,14 +7,14 @@ local async = async_lib.async
 local await = async_lib.await
 local void = async_lib.void
 local custom = {
-  ['html'] = true,
-  ['jsx'] = true,
-  ['lua'] = true,
-  ['python'] = true,
-  ['ruby'] = true,
-  ['svelte'] = true,
-  ['toml'] = true,
-  ['tsx'] = true,
+  ["html"] = true,
+  ["jsx"] = true,
+  ["lua"] = true,
+  ["python"] = true,
+  ["ruby"] = true,
+  ["svelte"] = true,
+  ["toml"] = true,
+  ["tsx"] = true,
 }
 
 local function color_node(bufnr, node, len, count)
@@ -33,37 +33,38 @@ end
 
 local M = {}
 
-M.highlight_node_recursive = async(function(parens, bufnr, extended_mode, node, len, count)
-  -- M.highlight_node_recursive = function(parens, bufnr, extended_mode, node, len, count)
-  local next_count = count
+M.highlight_node_recursive =
+  async(function(parens, bufnr, extended_mode, node, len, count)
+    -- M.highlight_node_recursive = function(parens, bufnr, extended_mode, node, len, count)
+    local next_count = count
 
-  for child in node:iter_children() do
-    local paren
-    if child:named() then
-      paren = parens[child:type() .. '+']
-    else
-      paren = parens[child:type()]
-    end
-
-    if paren ~= nil then
-      next_count = next_count + paren[1]
-
-      if paren[2] or (extended_mode and paren[3]) then
-        color_node(bufnr, child, len, count)
-      end
-
-      await(M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count))
-      -- M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count)
-
+    for child in node:iter_children() do
+      local paren
       if child:named() then
-        next_count = next_count - paren[1]
+        paren = parens[child:type() .. "+"]
+      else
+        paren = parens[child:type()]
       end
-    elseif child:child_count() ~= 0 then
-      await(M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count))
-      -- M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count)
+
+      if paren ~= nil then
+        next_count = next_count + paren[1]
+
+        if paren[2] or (extended_mode and paren[3]) then
+          color_node(bufnr, child, len, count)
+        end
+
+        await(M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count))
+        -- M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count)
+
+        if child:named() then
+          next_count = next_count - paren[1]
+        end
+      elseif child:child_count() ~= 0 then
+        await(M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count))
+        -- M.highlight_node_recursive(parens, bufnr, extended_mode, child, len, next_count)
+      end
     end
-  end
-end)
+  end)
 -- end
 
 M.callbackfn = async(function(bufnr, parser, extended_mode)
@@ -82,9 +83,9 @@ M.callbackfn = async(function(bufnr, parser, extended_mode)
 
     local parens
     if custom[lang] then
-      parens = require('rainbow.langs.' .. lang)
+      parens = require("rainbow.langs." .. lang)
     else
-      parens = require('rainbow.langs.default')
+      parens = require("rainbow.langs.default")
     end
     await(M.highlight_node_recursive(parens, bufnr, extended_mode, root_node, #colors, 1))
     -- M.highlight_node_recursive(parens, bufnr, extended_mode, root_node, #colors, 1)
@@ -97,9 +98,11 @@ function M.attach(bufnr, lang)
 
   local extended_mode = config.extended_mode or config.extended_mode[lang]
   await(M.callbackfn(bufnr, parser, extended_mode)) -- do it on attach
-  vim.api.nvim_buf_attach(bufnr, false, { on_lines = void(async(function()
-    await(M.callbackfn(bufnr, parser, extended_mode))
-  end)) }) --do it on every change
+  vim.api.nvim_buf_attach(bufnr, false, {
+    on_lines = void(async(function()
+      await(M.callbackfn(bufnr, parser, extended_mode))
+    end)), 
+  }) --do it on every change
 end
 
 function M.detach(bufnr)
